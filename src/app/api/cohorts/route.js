@@ -33,10 +33,10 @@ export async function POST(req) {
 
   const result = await query(
     `INSERT INTO cohorts (name, description, segment_id, cohort_key, status, last_synced_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'ACTIVE', ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, 'ACTIVE', ?, ?, ?) RETURNING id`,
     [name, description || null, segmentId, key, syncedAt, now, now]
   )
 
-  const cohort = await query('SELECT * FROM cohorts WHERE id = ?', [result.insertId])
+  const cohort = await query('SELECT * FROM cohorts WHERE id = ?', [result[0].id])
   return NextResponse.json({ ...cohort[0], dealerCount: dealerCodes.length }, { status: 201 })
 }

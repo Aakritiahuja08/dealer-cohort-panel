@@ -1,16 +1,11 @@
 import { neon } from '@neondatabase/serverless'
 
-let sql
-function getSQL() {
-  if (!sql) sql = neon(process.env.DATABASE_URL)
-  return sql
-}
+const sql = neon(process.env.DATABASE_URL)
 
 let tableReady = false
 async function ensureTable() {
   if (tableReady) return
-  const db = getSQL()
-  await db`
+  await sql`
     CREATE TABLE IF NOT EXISTS cohorts (
       id             BIGSERIAL PRIMARY KEY,
       name           VARCHAR(255) NOT NULL UNIQUE,
@@ -26,11 +21,13 @@ async function ensureTable() {
   tableReady = true
 }
 
-export async function query(sqlStr, params = []) {
-  await ensureTable()
-  const db = getSQL()
-  // Convert ? placeholders to $1, $2, ... for Postgres
+// Converts ? placeholders to $1, $2, ... for Postgres
+function toPg(queryStr) {
   let i = 0
-  const pgSQL = sqlStr.replace(/\?/g, () => `$${++i}`)
-  return db(pgSQL, params)
+  return queryStr.replace(/\?/g, () => `$${++i}`)
+}
+
+export async function query(queryStr, params = []) {
+  await ensureTable()
+  return sql(toPg(queryStr), params)
 }
