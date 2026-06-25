@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { query } from '@/lib/db'
-import { addDealers, removeDealers, getDealerCount, getSegmentsForDealer } from '@/lib/segmentation'
 import { assignCohort, clearCohort } from '@/lib/clevertap'
 
 export async function PUT(req, { params }) {
@@ -10,33 +9,39 @@ export async function PUT(req, { params }) {
   const [cohort] = await query('SELECT * FROM cohorts WHERE id = ?', [params.id])
   if (!cohort) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+  const now = new Date().toISOString()
+
   if (!remove) {
-    // Overlap check — dealer must not already be in another cohort
-    const conflicts = []
-    for (const code of dealerCodes) {
-      const segmentIds = await getSegmentsForDealer(code)
-      for (const sid of segmentIds) {
-        if (sid !== cohort.segment_id) {
-          const [other] = await query('SELECT name FROM cohorts WHERE segment_id = ?', [sid])
-          if (other) { conflicts.push(code); break }
-        }
-      }
-    }
+    // Overlap check — dealer must not be in another cohort
+    const placeholders = dealerCodes.map(() => '?').join(',')
+    const conflicts = await query(
+      `SELECT dealer_code FROM cohort_dealers WHERE dealer_code IN (${placeholders}) AND cohort_id != ?`,
+      [...dealerCodes, params.id]
+    )
     if (conflicts.length) {
-      return NextResponse.json({ error: `Dealers already in another cohort: ${conflicts.join(', ')}` }, { status: 400 })
+      const codes = conflicts.map(r => r.dealer_code).join(', ')
+      return NextResponse.json({ error: `Dealers already in another cohort: ${codes}` }, { status: 400 })
     }
 
-    await addDealers(cohort.segment_id, dealerCodes)
+    for (const code of dealerCodes) {
+      await query(
+        'INSERT INTO cohort_dealers (cohort_id, dealer_code) VALUES (?, ?) ON CONFLICT DO NOTHING',
+        [params.id, code]
+      )
+    }
     await assignCohort(dealerCodes, cohort.cohort_key)
   } else {
-    await removeDealers(cohort.segment_id, dealerCodes)
+    const placeholders = dealerCodes.map(() => '?').join(',')
+    await query(
+      `DELETE FROM cohort_dealers WHERE cohort_id = ? AND dealer_code IN (${placeholders})`,
+      [params.id, ...dealerCodes]
+    )
     await clearCohort(dealerCodes)
   }
 
-  const now = new Date().toISOString().slice(0, 19).replace('T', ' ')
   await query('UPDATE cohorts SET last_synced_at = ?, updated_at = ? WHERE id = ?', [now, now, params.id])
 
   const [updated] = await query('SELECT * FROM cohorts WHERE id = ?', [params.id])
-  const dealerCount = await getDealerCount(cohort.segment_id)
-  return NextResponse.json({ ...updated, dealerCount })
+  const [{ count }] = await query('SELECT COUNT(*) as count FROM cohort_dealers WHERE cohort_id = ?', [params.id])
+  return NextResponse.json({ ...updated, dealerCount: Number(count) })
 }

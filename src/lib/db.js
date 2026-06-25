@@ -10,7 +10,6 @@ async function ensureTable() {
       id             BIGSERIAL PRIMARY KEY,
       name           VARCHAR(255) NOT NULL UNIQUE,
       description    TEXT,
-      segment_id     BIGINT NOT NULL,
       cohort_key     VARCHAR(255) NOT NULL UNIQUE,
       status         VARCHAR(10) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE','INACTIVE')),
       last_synced_at TIMESTAMP,
@@ -18,10 +17,16 @@ async function ensureTable() {
       updated_at     TIMESTAMP NOT NULL
     )
   `
+  await sql`
+    CREATE TABLE IF NOT EXISTS cohort_dealers (
+      cohort_id   BIGINT NOT NULL,
+      dealer_code VARCHAR(255) NOT NULL,
+      PRIMARY KEY (cohort_id, dealer_code)
+    )
+  `
   tableReady = true
 }
 
-// Converts ? placeholders to $1, $2, ... for Postgres
 function toPg(queryStr) {
   let i = 0
   return queryStr.replace(/\?/g, () => `$${++i}`)
