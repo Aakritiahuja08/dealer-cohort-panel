@@ -29,5 +29,5 @@ function toPg(queryStr) {
 
 export async function query(queryStr, params = []) {
   await ensureTable()
-  return sql(toPg(queryStr), params)
+  return sql.query(toPg(queryStr), params)
 }
