@@ -4,16 +4,11 @@ import { createSegment, addDealers, getDealerCount } from '@/lib/segmentation'
 import { assignCohort } from '@/lib/clevertap'
 
 export async function GET() {
-  try {
-    const cohorts = await query('SELECT * FROM cohorts ORDER BY created_at DESC')
-    const withCounts = await Promise.all(
-      cohorts.map(async c => ({ ...c, dealerCount: await getDealerCount(c.segment_id) }))
-    )
-    return NextResponse.json(withCounts)
-  } catch (e) {
-    console.error('[GET /api/cohorts]', e)
-    return NextResponse.json({ error: e.message }, { status: 500 })
-  }
+  const cohorts = await query('SELECT * FROM cohorts ORDER BY created_at DESC')
+  const withCounts = await Promise.all(
+    cohorts.map(async c => ({ ...c, dealerCount: await getDealerCount(c.segment_id) }))
+  )
+  return NextResponse.json(withCounts)
 }
 
 export async function POST(req) {
